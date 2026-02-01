@@ -9,7 +9,7 @@ export default function AuthGuard({ children, role }) {
     const token = localStorage.getItem("token");
     const user = localStorage.getItem("user");
     if (!token || !user) {
-      router.replace("/");
+      router.replace("/login");
       return;
     }
     if (role) {

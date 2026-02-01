@@ -99,15 +99,12 @@ export default function LoginPage() {
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
               <input
-  type="password"
-  className="w-full pl-10 pr-3 py-2.5 
-             border border-gray-300 rounded-lg 
-             text-gray-900 placeholder-gray-400
-             bg-white
-             focus:outline-none focus:border-red-500"
-  placeholder="••••••••"
-/>
-
+                type="password"
+                className="w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-red-500"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+              />
             </div>
           </div>
 

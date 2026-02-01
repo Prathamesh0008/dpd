@@ -20,7 +20,7 @@ export default function Dashboard() {
   function logout() {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
-    router.push("/");
+    router.push("/login");
   }
 
   const user =
