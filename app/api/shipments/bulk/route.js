@@ -1,20 +1,25 @@
 import { validateOrders, storeOrders } from "@/lib/dpd";
+import { connectDB } from "@/lib/db";
+import Shipment from "@/models/Shipment";
+import { getTokenFromRequest, verifyToken } from "@/lib/auth";
 import { mergeBase64Pdfs } from "@/lib/mergePdf";
 
-function parseCsv(csv) {
-  const [headerLine, ...lines] = csv.trim().split("\n");
-  const headers = headerLine.split(",").map(h => h.trim());
+/* ---------------- CSV PARSER ---------------- */
+function parseCsv(text) {
+  const [header, ...rows] = text.trim().split("\n");
+  const keys = header.split(",").map(k => k.trim());
 
-  return lines.map(line => {
-    const values = line.split(",");
-    const row = {};
-    headers.forEach((h, i) => {
-      row[h] = values[i]?.trim() || "";
+  return rows.map(row => {
+    const values = row.split(",");
+    const obj = {};
+    keys.forEach((k, i) => {
+      obj[k] = values[i]?.trim() || "";
     });
-    return row;
+    return obj;
   });
 }
 
+/* ---------------- FIXED SENDER ---------------- */
 const FIXED_SENDER = {
   name1: "Your Company",
   street: "Your Street",
@@ -25,9 +30,22 @@ const FIXED_SENDER = {
 };
 
 export async function POST(req) {
-  console.log("🚀 BULK API HIT");
-
   try {
+    /* ---------- AUTH ---------- */
+    const token = getTokenFromRequest(req);
+    const user = verifyToken(token);
+
+    if (!user) {
+      return Response.json(
+        { ok: false, message: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    /* ---------- DB ---------- */
+    await connectDB();
+
+    /* ---------- FILE ---------- */
     const formData = await req.formData();
     const file = formData.get("file");
 
@@ -39,16 +57,13 @@ export async function POST(req) {
     const rows = parseCsv(csvText);
 
     if (!rows.length) {
-      throw new Error("CSV empty");
-    }
-
-    if (rows.length > 20) {
-      throw new Error("Bulk limit exceeded (20 max)");
+      throw new Error("CSV is empty");
     }
 
     const results = [];
     const pdfs = [];
 
+    /* ---------- LOOP ---------- */
     for (const row of rows) {
       try {
         const payload = {
@@ -65,10 +80,21 @@ export async function POST(req) {
         };
 
         const v = await validateOrders(payload);
-        if (!v.success) throw new Error("Validate failed");
+        if (!v.success) throw new Error("Validation failed");
 
         const s = await storeOrders(payload);
-        if (!s.labelBase64) throw new Error("Store failed");
+        if (!s.trackingNumber || !s.labelBase64) {
+          throw new Error("DPD store failed");
+        }
+
+        /* ---------- SAVE EACH SHIPMENT ---------- */
+        await Shipment.create({
+          userId: user.id, // 👈 FROM JWT
+          recipient: payload.recipient,
+          trackingNumber: s.trackingNumber,
+          mpsId: s.mpsId,
+          source: "bulk",
+        });
 
         results.push({
           name: row.name,
@@ -78,7 +104,8 @@ export async function POST(req) {
 
         pdfs.push(s.labelBase64);
 
-        await new Promise(r => setTimeout(r, 400)); // DPD rate limit
+        // DPD rate limit safety
+        await new Promise(r => setTimeout(r, 300));
 
       } catch (err) {
         results.push({
@@ -89,6 +116,7 @@ export async function POST(req) {
       }
     }
 
+    /* ---------- MERGE PDFs ---------- */
     const mergedPdfBase64 = await mergeBase64Pdfs(pdfs);
 
     return Response.json({
@@ -98,7 +126,7 @@ export async function POST(req) {
     });
 
   } catch (err) {
-    console.error("❌ BULK API CRASH:", err);
+    console.error("BULK ERROR:", err);
     return Response.json(
       { ok: false, message: err.message },
       { status: 500 }

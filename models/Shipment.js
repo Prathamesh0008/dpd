@@ -2,17 +2,35 @@ import mongoose from "mongoose";
 
 const ShipmentSchema = new mongoose.Schema(
   {
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
 
-    sender: { type: Object, required: true },
-    recipient: { type: Object, required: true },
+    recipient: {
+      name1: String,
+      street: String,
+      city: String,
+      zipCode: String,
+      country: String,
+    },
 
-    trackingNumber: { type: String, default: "" },
-    mpsId: { type: String, default: "" },
+    trackingNumber: {
+      type: String,
+      required: true,
+    },
 
-    labelBase64: { type: String, default: "" }, // PDF base64 from DPD
+    mpsId: String,
+
+    source: {
+      type: String,
+      enum: ["single", "bulk"],
+      default: "single",
+    },
   },
   { timestamps: true }
 );
 
-export default mongoose.models.Shipment || mongoose.model("Shipment", ShipmentSchema);
+export default mongoose.models.Shipment ||
+  mongoose.model("Shipment", ShipmentSchema);
